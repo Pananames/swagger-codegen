@@ -3,3 +3,5 @@ lib/Configuration.*
 lib/HeaderSelector.*
 test/
 git_push.sh
+.travis.yml
+.php_cs
