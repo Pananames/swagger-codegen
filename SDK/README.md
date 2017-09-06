@@ -1,9 +1,20 @@
 Generate library:
 -----------------------------------
 
+В корне swagger выполнить:
+
 ```
 sudo ./run-in-docker.sh generate -i SDK/config.yaml -l php -o SDK/lib/Pananames -t SDK/template/ --invoker-package 'Pananames' --git-user-id 'pananames' --git-repo-id 'php-api' --artifact-version '2.0.0'
 ```
+- i - путь к config-файлу yaml
+- l - язык, с помощью которого генерировать библиотеку
+- o - путь к директории, где будет сохранена сгенерированная библиотеку
+- t - путь к шаблону
+- --invoker-package - имя пакета, используется для namespace
+
+- --git-user-id - для composer.json
+- --git-repo-id - для composer.json
+- --artifact-version - для composer.json
 
 -----------------------
 Development in Docker
@@ -31,12 +42,12 @@ Build package after changing the transforming logic:
 sudo ./run-in-docker.sh mvn package
 ```
 
-Generate new template:
+Generate new lib from template:
 -----------------------------------
 Move .swagger-codegen-ignore to library output DIR
 
 ```
-sudo ./run-in-docker.sh generate -i template/config.yaml -l php -o /gen/out/Pananames -t template/php --invoker-package 'Pananames' --git-user-id 'pananames' --git-repo-id 'php-api' --artifact-version '2.0.0'
+sudo ./run-in-docker.sh generate -i config.yaml -l php -o output-dir -t path/to/template --invoker-package 'Package' --git-user-id 'git-user' --git-repo-id 'git-repo' --artifact-version 'lib-version'
 ```
 
 -----------------------------------
