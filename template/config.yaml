@@ -1,0 +1,2256 @@
+swagger: "2.0"
+################################################################################
+#                              API Information                                 #
+################################################################################
+info:
+  version: 2.0.0
+  title: Pananames.com API
+  description: |
+    This manual describes the API commands for domain handling.
+
+    ## Endpoint
+
+    All API access is over HTTPS, and accessed from the `api.pananames.com` domain.
+
+    In order to maintain compatibility in the future, all requests must specify an API version, which is appended to the URL.
+
+    The current API version is `v2`.
+
+    ```
+    https://api.pananames.com/merchant/v2/
+    ```
+
+    ### Testing
+
+    We maintain a separate environment for testing called Staging. Staging API calls must use the `api-staging.pananames.com` domain. Please contact our support to obtain access to Staging.
+
+    ## Content Types
+
+    API v2 only supports the JSON content type. HTTP requests must be JSON-encoded, and HTTP responses will contain JSON-encoded payloads(`application/json`).
+
+    ## Authentication
+
+    API supports authentication via the API key(signatures).
+
+    Signatures for previous API version will not work with current version so you should generate new one.
+
+    Keys can be generated from the [Signatures section](https://mcp-admin.pananames.com/profile/signatures) on the site. You can generate API key for specific IP address (recommended), so this key won't work from all other IP addresses.
+
+    Note that keys grant full access to your Pananames account and should be protected the same way you would protect your password.
+
+    If a specific API key is compromised or you think so, you should disable that key from the [Signatures section](https://mcp-admin.pananames.com/profile/signatures) as soon as possible.
+
+    Simple request with key/signature:
+
+    ```
+    curl -H 'SIGNATURE: API-KEY' https://api.pananames.com/merchant/v2/tlds
+    ```
+
+    ## HTTP Status Code Meaning
+
+    ### Successful
+
+    - `200 OK` - Everything worked as expected.
+    - `201 Created` - The request was successful and a resource was created. This is typically a response from a `POST` request to create a resource, such as the registration of a Domain or the creation of a Child Name Server.
+    - `202 Accepted` - The request has been accepted for processing. This is typically a response from a `POST` request that is handled async in our system, such as a Domain transfer request.
+    - `204 No Content` - The request was successful but the response body is empty. This is typically a response from a `DELETE` request to delete a resource.
+
+    ### Error
+
+    - `400 Bad Request` - A required parameter or the request is invalid.
+    - `401 Unauthorized` - The authentication credentials are invalid.
+    - `404 Not Found` - The requested resource doesn’t exist.
+    - `412 Payment Required` - Balance is not enough to complete operation.
+    - `500 Server error` - something went wrong. Please contact our support team.
+
+
+    ## Responses
+
+    A successful response will be returned as a JSON object with at least one of the following top-level members:
+    - `data`: the document’s “primary data”
+    - `errors`: an array of error objects
+    - `meta`: a meta object that contains non-standard meta-information.
+
+    The members `data` and `errors` cannot coexist in the same document.
+
+
+    ### Errors
+
+    All error messages have same format.
+    ```json
+    {
+      "errors": [
+        {
+          "code": 400,
+          "message": "Bad request",
+          "description": "JSON is invalid."
+        }
+      ]
+    }
+    ```
+
+    ### Timestamps
+
+    All the timestamps and the dates are formatted according the [ISO-8601 standard](https://en.wikipedia.org/wiki/ISO_8601).
+
+    ```
+    2016-12-11T17:31:51Z # Timestamp
+    2016-12-11           # Date
+    ```
+
+    ### Pagination
+
+    Any API endpoint that returns a list of items requires pagination. By default we will return `30` records from any listing endpoint.
+
+    If an API endpoint returns a list of items, then it will include a meta object that contains pagination information.
+
+    The pagination information contains the following details:
+
+     - `current_page`: The page currently returned (default: 1)
+     - `per_page`: The number of entries returned per page (default: 30)
+     - `total_entries`: The total number of entries available in the entire collection
+     - `total_pages`: The total number of pages available given the current per_page value
+
+     ## Domain Life Cycle
+
+     ![ICANN](img/ICANN-domain-life.png)
+
+     ### Phase 1. Active Domain - 1-10 years
+
+     A domain is registered for a time period of 1 - 10 years(each TLD has own minimum and maximum period). During this time the domain owner has use of the domain under acceptable use policies. Whithin the *Add Grace Period* i.e. the first five days following the initial registration of a domain name, if a domain name is deleted, the registrant at the time of the deletion is credited for the amount of the registration.
+
+     ### Phase 2. Grace Period - 38 days
+
+     If the registrant does not renew a domain name, the domain name's expiration process starts. During a 38 day period, the registrant(domain name owner) can pay a renew fee and resume the operation of a domain name.
+
+     ### Phase 3. Redemption Grace Period - 30 days
+
+     If the domain is deleted, it then enters a 30-day redemption period in which the domain's status is `redemption period` and the name is removed from registry's zone file(your website and email no longer function). During this time the owner of the domain can pay a redemption penalty fee(you can find from `GET /domains/{domain}` method) and restore the domain.
+     During this phase a domain name can only be renewed and cannot be transfered to another registrar.
+
+     ### Phase 4. Pending Delete - 5 days
+
+     The domain then enters a 5-day pending delete period. The registrant no longer has the ability to do any kind of operations with the domain.
+
+     ### Phase 5. Available
+
+     The domain is relesead to the general public and available for registration on the sixth day. As soon as the domain name is available for registration again, it is dropped into a batch pool, and competing back-order service providers can try to register the domain name again if interested.
+
+     ## Statuses
+
+     ### Domain Statuses
+
+     Each domain has a status:
+
+      - `ok`: The domain is in our system.
+      - `transfer out ready`: The domain was initialized for transfer out and awaiting gaining registrar confirmation.
+      - `transferring out`: Transfer was confirmed by gaining registrar. The domain has registry status pendingTransfer and will be transferred to gaining registrar in 5 calendar days.
+      - `expired`: The domain has been expired(Phase 2).
+      - `redemption`: The domain enters a 30-day redemption period(Phase 3).
+      - `suspended`: The domain was disabled for any operations.
+
+     ### Lock Statuses
+
+     Each domain has a lock status:
+
+      - `client`: The domain locked for transfer. Default status for all new domains.
+      - `unlocked`: The domain unlocked. Any operation can be performed
+      - `registrar`: The domain locked for transfer, update and deletion by registrar. For any questions about the reasons for the lock, please contact support
+      - `registry`: The domain locked by registry. Registry status codes can be fetched via the `GET /domains/{domain}/status_codes` method.
+
+     ## Errors
+
+     ### Error Types
+
+     Each error object has a error code:
+
+     - `1` - Signature was not provided or was invalid. Check your signature and try again.
+     - `2` - Required parameter is missing or value is invalid. See `description` field for details, fix the parameter and try again.
+     - `3` - Some verification did not pass or object state is invalid. For example, you have tried to initiate transfer for locked domain.
+     - `4` - Some registry side error. See `description` field for details and contact with support.
+     - `5` - Some server side error. See `description` field for details and contact with support.
+
+     ### Common Errors
+
+     All specific errors will be provided in description of each method.
+
+     HTTP code | Error code | Message | Description
+     - | - | - | -
+     401 | 1 | Unauthorized | Signature was not provided or was invalid.
+     400 | 2 | Invalid parameter | Required parameter is missing or value is invalid. See `description` field for details.
+     400 | 3 | Unable to perform this operation | This TLD is not supported. For example, you have tried to call 'GET /domains/{domain}/check' for a domain name from unsupported TLD.
+     400 | 3 | Unable to perform this operation | Object does not exist or you do not have permissions to perform this operation. For example, you have tried to set WHOIS information for a domain which was not owned by you.
+
+
+################################################################################
+#                  Host, Base Path, Schemes and Content Types                  #
+################################################################################
+host: api-staging.pananames.com
+basePath: /merchant/v2
+schemes:
+  - http
+consumes:
+  - application/json
+produces:
+  - application/json
+################################################################################
+#                                  Security                                    #
+################################################################################
+securityDefinitions:
+  key:
+    type: apiKey
+    in: header
+    name: SIGNATURE
+security:
+  - key: []
+################################################################################
+#                                   Parameters                                 #
+################################################################################
+parameters:
+  domain:
+      name: domain
+      in: path
+      description: The name of the domain.
+      type: string
+      required: true
+      minLength: 3
+  current_page:
+    name: current_page
+    description: "Current page number (default: 1)."
+    in: query
+    type: integer
+    default: 1
+  per_page:
+    name: per_page
+    description: "Count of items per page (default: 30, maximum: 100)."
+    in: query
+    type: integer
+    default: 30
+  lock_status:
+    name: lock_status
+    description: Domain lock status.
+    in: query
+    type: string
+    enum:
+      - unlocked
+      - client
+      - registrar
+      - registry
+  status:
+    name: status
+    description: Domain status.
+    in: query
+    type: string
+    enum:
+      - ok
+      - transfer out ready
+      - transferring out
+      - expired
+      - redemption
+      - suspended
+  email_status:
+    name: email_status
+    description: Email status.
+    in: query
+    type: string
+    enum:
+      - unverified
+      - verified
+      - suspended
+  transfer_status:
+    name: status
+    description: Transfer status.
+    in: query
+    type: string
+    enum:
+      - waiting registrant confirmation
+      - registrant rejected
+      - registrar rejected
+      - waiting transfer
+
+responses:
+  400:
+      description: The request was invalid or cannot be served. The exact error should be explained in the error payload.
+      schema:
+        $ref: '#/definitions/ErrorResponse'
+  401:
+        description: Unauthorized. Signature was not provided or was invalid.
+        schema:
+          $ref: '#/definitions/ErrorResponse'
+  412:
+      description: User doesn't have enough balance to complete operation.
+      schema:
+        $ref: '#/definitions/ErrorResponse'
+
+paths:
+  /domains:
+    get:
+      operationId: getList
+      tags:
+        - Domains
+      summary: Get paged list of your domains.
+      description: |
+          Get paged list of domains available in your account.
+
+          ### Filters
+
+          Name | Description
+          - | -
+          `domain_like` | Only include domains containing given string.
+          `status` | Only include domains with given status.
+          `lock_status` | Only include domains with given lock status.
+
+      parameters:
+        - $ref: '#/parameters/current_page'
+        - $ref: '#/parameters/per_page'
+        - $ref: '#/parameters/lock_status'
+        - $ref: '#/parameters/status'
+        - name: domain_like
+          description: Filter for domain name.
+          in: query
+          type: string
+
+      responses:
+        200:
+          description: Returns paged domains list.
+          schema:
+            $ref: '#/definitions/DomainsListResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    post:
+      operationId: register
+      tags:
+        - Domains
+      summary: Register a domain name.
+      description: |
+          Register a domain name.
+
+          The `premium_price` can be fetched via the `GET /domains/{domain}/check` method.
+
+          ### Blocking Status
+          Blocking 3-5 sec.
+
+          ### Errors
+          HTTP code | Error code | Message | Description
+          - | - | - | -
+          412 | 3 | Unable to perform this operation | Not enough balance. Please add funds on balance and try again.
+          400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      parameters:
+        - name: data
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/RegistrationData'
+
+      responses:
+        201:
+          description: Returns information about registered domain.
+          schema:
+            $ref: '#/definitions/DomainInfoResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        412:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /domains/{domain}:
+    parameters:
+      - $ref: '#/parameters/domain'
+    get:
+      operationId: getInfo
+      tags:
+        - Domains
+      summary: Get information about the domain.
+      description: |
+          Get information about the domain.
+
+      responses:
+        200:
+          description: Returns information about the domain.
+          schema:
+            $ref: '#/definitions/DomainInfoResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    delete:
+      operationId: delete
+      tags:
+        - Domains
+      summary: Delete domain.
+      description: |
+          Delete domain.
+
+          Domain name can be deleted at any time but only during first *5 days* the registration cost will be refunded, domain name be available stright away.
+
+          Please note that if the domain name will be deleted *after first 5 days* from the date of registration, domain will have redemption period and it will be available again after 30-35 days.
+
+          ### Errors
+          HTTP code | Error code | Message | Description
+          - | - | - | -
+          400 | 3 | Unable to perform this operation | Domain is suspended. Verify registrant email and try again.
+          400 | 3 | Unable to perform this operation | Domain locked by registrar.
+          400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      responses:
+        204:
+          description: Domain was deleted.
+          schema:
+            $ref: "#/definitions/EmptyResponse"
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /domains/{domain}/check:
+    parameters:
+      - $ref: '#/parameters/domain'
+    get:
+      operationId: check
+      tags:
+        - Domains
+      summary: Check the domain availability.
+      description: |
+          Get information about the domain availability, prices and claim.
+
+          ### Errors
+          HTTP code | Error code | Message | Description
+          - | - | - | -
+          400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      responses:
+        200:
+          description: Returns information about the domain.
+          schema:
+            $ref: '#/definitions/CheckResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        401:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /domains/{domain}/claim:
+    parameters:
+      - $ref: '#/parameters/domain'
+
+    get:
+      operationId: getClaim
+      tags:
+        - Domains
+      summary: Get claim information.
+      description: |
+        Get claim information for the domain.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      responses:
+        200:
+          description: Returns claim information for the domain.
+          schema:
+            $ref: '#/definitions/ClaimResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /domains/{domain}/status_codes:
+    parameters:
+      - $ref: '#/parameters/domain'
+
+    get:
+      operationId: getStatusCodes
+      tags:
+        - Domains
+      summary: Get status codes.
+      description: |
+        Get list of status codes set for the domain.
+
+        [EPP Status Code with description](https://www.icann.org/resources/pages/epp-status-codes-2014-06-16-en).
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      responses:
+        200:
+          description: Returns full list of status codes.
+          schema:
+            $ref: '#/definitions/StatusCodesListResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /domains/{domain}/auto_renew:
+    put:
+      operationId: enableAutoRenew
+      tags:
+        - Domains
+      summary: Enable auto renew.
+      description: |
+        Enable auto renew of the domain.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 3 | Unable to perform this operation | Domain is suspended. Verify registrant email and try again.
+        400 | 3 | Unable to perform this operation | Domain locked by registrar.
+
+      parameters:
+        - $ref: '#/parameters/domain'
+
+      responses:
+        200:
+          description: Returns current auto renew status.
+          schema:
+            $ref: '#/definitions/AutoRenewResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    delete:
+      operationId: disableAutoRenew
+      tags:
+        - Domains
+      summary: Disable auto renew.
+      description: |
+        Disable auto renew of the domain.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 3 | Unable to perform this operation | Domain is suspended. Verify registrant email and try again.
+        400 | 3 | Unable to perform this operation | Domain locked by registrar.
+
+      parameters:
+        - $ref: '#/parameters/domain'
+
+      responses:
+        200:
+          description: Returns current auto renew status.
+          schema:
+            $ref: '#/definitions/AutoRenewResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /domains/{domain}/whois:
+    parameters:
+      - $ref: '#/parameters/domain'
+    get:
+      operationId: getWhois
+      tags:
+        - WHOIS
+      summary: Get WHOIS information.
+      description: |
+        Get WHOIS information for the domain. It works only for your domains.
+
+      parameters:
+        - name: preview
+          in: query
+          description: If WHOIS privacy protection enabled, to see public data, set value to true.
+          type: boolean
+          default: false
+
+      responses:
+        200:
+          description: WHOIS information for the domain.
+          schema:
+              $ref: '#/definitions/WhoisResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    put:
+      operationId: setWhois
+      tags:
+        - WHOIS
+      summary: Set WHOIS information.
+      description: |
+        Update WHOIS information for the domain.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 3 | Unable to perform this operation | Domain is suspended. Verify registrant email and try again.
+        400 | 3 | Unable to perform this operation | Domain locked by registrar.
+        400 | 3 | Unable to perform this operation | Domain in redemption period.
+        400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      parameters:
+        - name: info
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/WhoisInfoUpdateRequest'
+
+      responses:
+        200:
+          description: Returns updated WHOIS information.
+          schema:
+            $ref: '#/definitions/WhoisResponse'
+        202:
+          description: Request accepted. Changes must be confirmed by clicking link in emails sent to old and new registrants.
+          schema:
+            $ref: '#/definitions/WhoisResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /domains/{domain}/whois_privacy:
+    get:
+      operationId: getWhoisPrivacy
+      tags:
+        - WHOIS
+      summary: Get WHOIS privacy status.
+      description: |
+        Get WHOIS privacy status for the domain.
+
+      parameters:
+        - $ref: '#/parameters/domain'
+
+      responses:
+        200:
+          description: Returns current WHOIS privacy status.
+          schema:
+            $ref: '#/definitions/WhoisPrivacyResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    put:
+      operationId: enableWhoisPrivacy
+      tags:
+        - WHOIS
+      summary: Enable WHOIS privacy.
+      description: |
+        Enable WHOIS privacy of the domain.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 3 | Unable to perform this operation | Domain is suspended. Verify registrant email and try again.
+        400 | 3 | Unable to perform this operation | Domain locked by registrar.
+        400 | 3 | Unable to perform this operation | Domain in redemption period.
+        400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      parameters:
+        - $ref: '#/parameters/domain'
+
+      responses:
+        200:
+          description: Returns current WHOIS privacy status.
+          schema:
+            $ref: '#/definitions/WhoisPrivacyResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    delete:
+      operationId: disableWhoisPrivacy
+      tags:
+        - WHOIS
+      summary: Disable WHOIS privacy.
+      description: |
+        Disable WHOIS privacy of the domain.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 3 | Unable to perform this operation | Domain is suspended. Verify registrant email and try again.
+        400 | 3 | Unable to perform this operation | Domain locked by registrar.
+        400 | 3 | Unable to perform this operation | Domain in redemption period.
+        400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      parameters:
+        - $ref: '#/parameters/domain'
+
+      responses:
+        200:
+          description: Returns current WHOIS privacy status.
+          schema:
+            $ref: '#/definitions/WhoisPrivacyResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /domains/{domain}/renew:
+    put:
+      operationId: renew
+      tags:
+        - Domains
+      summary: Renew tne domain.
+      description: |
+        Renew tne domain. The domain may be renewed only for a period 1 to 10 years. An information about minimum and maximum registration period is available via `/tlds` method.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        412 | 3 | Unable to perform this operation | Not enough balance. Please add funds on balance and try again.
+        400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      parameters:
+        - $ref: '#/parameters/domain'
+        - name: data
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/RenewRequest'
+
+      responses:
+        200:
+          description: Returns new expiration date for the domain.
+          schema:
+            $ref: '#/definitions/RenewResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        412:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /domains/{domain}/redeem:
+    put:
+      operationId: redeem
+      tags:
+        - Domains
+      summary: Restore domain.
+      description: |
+        Restore domain name during Redemption Grace Period.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        412 | 3 | Unable to perform this operation | Not enough balance. Please add funds on balance and try again.
+        400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      parameters:
+        - $ref: '#/parameters/domain'
+      responses:
+        200:
+          description: Restore domain.
+          schema:
+            $ref: '#/definitions/RenewResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        412:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /domains/{domain}/resend:
+    put:
+      operationId: resendVerificationEmail
+      tags:
+        - Domains
+      summary: Resend email.
+      description: |
+          Resend verification email.
+
+          ### Errors
+          HTTP code | Error code | Message | Description
+          - | - | - | -
+          400 | 3 | Unable to perform this operation | The email has already been verified.
+
+      parameters:
+        - $ref: '#/parameters/domain'
+
+      responses:
+        204:
+          description: Email was send.
+          schema:
+            $ref: "#/definitions/EmptyResponse"
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /domains/{domain}/redirect:
+    parameters:
+      - $ref: '#/parameters/domain'
+    get:
+      operationId: getRedirect
+      tags:
+        - Redirect
+      summary: Get current redirect URL.
+      description: |
+        Get current redirect URL and mode for the domain.
+        If redirect URL wasn't set you will receive empty string as value for URL.
+
+      responses:
+        200:
+          description: Returns current redirect URL.
+          schema:
+            $ref: '#/definitions/DomainRedirectResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    put:
+      operationId: enable
+      tags:
+        - Redirect
+      summary: Enable redirect.
+      description: |
+        Enable or update redirect for the domain.
+
+        **Important:** When domain forwarding is enabled, "A" records ("", "*", "www") will be changed to the following hosts records:
+
+        1. www.{domain}. IN A 78.140.140.132
+        2. *.{domain}. IN A 78.140.140.132
+        3. {domain}. IN A 78.140.140.132
+
+        And names servers will be changed to:
+
+        * ns1.pananames.com
+        * ns2.pananames.com
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 3 | Unable to perform this operation | Domain is suspended. Verify registrant email and try again.
+        400 | 3 | Unable to perform this operation | Domain locked by registrar.
+        400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      parameters:
+        - name: data
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/DomainRedirectUpdateRequest'
+
+      responses:
+        200:
+          description: Returns updated redirect URL.
+          schema:
+            $ref: '#/definitions/DomainRedirectResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    delete:
+      operationId: disable
+      tags:
+        - Redirect
+      summary: Disable redirect.
+      description: |
+        Disable redirect for the domain.
+
+        **Important:** When domain redirecting is disabled, "A" records ("", "*", "www") will be deleted. Name servers settings for the domain won't be changed.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 3 | Unable to perform this operation | Domain is suspended. Verify registrant email and try again.
+        400 | 3 | Unable to perform this operation | Domain locked by registrar.
+
+      responses:
+        204:
+          description: Redirect was disabled.
+          schema:
+            $ref: "#/definitions/EmptyResponse"
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /domains/{domain}/name_servers:
+    parameters:
+      - $ref: '#/parameters/domain'
+    get:
+      operationId: getDnsServers
+      tags:
+        - Name Servers
+      summary: Get name servers.
+      description: |
+        Get name servers list for the domain.
+
+      responses:
+        200:
+          description: Returns name servers list.
+          schema:
+            $ref: '#/definitions/NameServersResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    put:
+      operationId: setDnsServers
+      tags:
+        - Name Servers
+      summary: Set name servers.
+      description: |
+        Set name servers for the domain.
+
+        **Important:** If you set not our name servers, then domain redirect and name server records will not work.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 3 | Unable to perform this operation | Domain is suspended. Verify registrant email and try again.
+        400 | 3 | Unable to perform this operation | Domain locked by registrar.
+        400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      parameters:
+        - name: name_servers
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/NameServersUpdateRequest'
+
+      responses:
+        202:
+          description: Returns updated name servers list. Changes will be applied in a few hours.
+          schema:
+            $ref: '#/definitions/NameServersResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /domains/{domain}/child_name_servers:
+    parameters:
+      - $ref: '#/parameters/domain'
+    get:
+      operationId: getChildDns
+      tags:
+        - Name Servers
+      summary: Get child name servers.
+      description: |
+        Get list of child name servers for the domain.
+
+      responses:
+        200:
+          description: Returns list of child name servers.
+          schema:
+            $ref: '#/definitions/ChildNameServersListResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    put:
+      operationId: updateChildDns
+      tags:
+        - Name Servers
+      summary: Update existing child name server.
+      description: |
+        Update existing child name server for the domain.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 3 | Unable to perform this operation | Domain is suspended. Verify registrant email and try again.
+        400 | 3 | Unable to perform this operation | Domain locked by registrar.
+        400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      parameters:
+        - name: childDns
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/ChildNameServer'
+
+      responses:
+        200:
+          description: Returns updated child name server.
+          schema:
+            $ref: '#/definitions/ChildNameServerResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    post:
+      operationId: createChildDns
+      tags:
+        - Name Servers
+      summary: Create new child name server.
+      description: |
+        Create new child name server for the domain.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 3 | Unable to perform this operation | Domain is suspended. Verify registrant email and try again.
+        400 | 3 | Unable to perform this operation | Domain locked by registrar.
+        400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      parameters:
+        - name: childNameServers
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/ChildNameServer'
+
+      responses:
+        201:
+          description: Returns created child name server.
+          schema:
+            $ref: '#/definitions/ChildNameServerResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    delete:
+      operationId: deleteChildDns
+      tags:
+        - Name Servers
+      summary: Delete child name server.
+      description: |
+        Delete child name server for the domain by name.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 3 | Unable to perform this operation | Domain is suspended. Verify registrant email and try again.
+        400 | 3 | Unable to perform this operation | Domain locked by registrar.
+        400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      parameters:
+        - name: childDns
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/ChildNameServerDeleteRequest'
+
+      responses:
+        204:
+          description: Child name server was deleted.
+          schema:
+            $ref: "#/definitions/EmptyResponse"
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /domains/{domain}/name_server_records:
+    parameters:
+      - $ref: '#/parameters/domain'
+    get:
+      operationId: getDnsRecords
+      tags:
+        - Name Servers
+      summary: Get name server records.
+      description: |
+        Get name server records list for the domain.
+
+      responses:
+        200:
+          description: Returns name server records list.
+          schema:
+            $ref: '#/definitions/NameServerRecordsListResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    post:
+      operationId: createDnsRecord
+      tags:
+        - Name Servers
+      summary: Create new name server record.
+      description: |
+        Create new name server record for the domain.
+
+        **Important:** To use name server records, you must use our name servers:
+
+        * ns1.pananames.com
+        * ns2.pananames.com
+
+        For **SRV** type record, the ‘value’ field must contain three space-separated values:
+        1. The first value is a number specifying the weight for this entry.
+        2. The second field is a number specifying the port on the target host of this service.
+        3. The last field is a name specifying the target host.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 3 | Unable to perform this operation | Domain is suspended. Verify registrant email and try again.
+        400 | 3 | Unable to perform this operation | Domain locked by registrar.
+
+      parameters:
+        - name: dnsRecords
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/NameServerRecord'
+
+      responses:
+        201:
+          description: Returns created name server record.
+          schema:
+            $ref: '#/definitions/NameServerRecordResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    put:
+      operationId: updateDnsRecord
+      tags:
+        - Name Servers
+      summary: Update existing name server record.
+      description: |
+        Update existing name server record for the domain.
+
+        **Important:** To use name server records, you must use our name servers:
+
+        * ns1.pananames.com
+        * ns2.pananames.com
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 3 | Unable to perform this operation | Domain is suspended. Verify registrant email and try again.
+        400 | 3 | Unable to perform this operation | Domain locked by registrar.
+
+      parameters:
+        - name: dnsRecord
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/NameServerRecord'
+
+      responses:
+        202:
+          description: Returns udpated name server record.
+          schema:
+            $ref: '#/definitions/NameServerRecordResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    delete:
+      operationId: deleteDnsRecord
+      tags:
+        - Name Servers
+      summary: Delete name server record.
+      description: |
+        Delete specific name server record for the domain.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 3 | Unable to perform this operation | Domain is suspended. Verify registrant email and try again.
+        400 | 3 | Unable to perform this operation | Domain locked by registrar.
+
+      parameters:
+        - name: dnsRecords
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/NameServerRecordDeleteRequest'
+
+      responses:
+        204:
+          description: Name server record was deleted.
+          schema:
+            $ref: "#/definitions/EmptyResponse"
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /domains/{domain}/transfer_out:
+    parameters:
+      - $ref: '#/parameters/domain'
+    put:
+      operationId: initTransferOut
+      tags:
+        - Transfer Out
+      summary: Init transfer out.
+      description: |
+        Prepare a domain for transferring out.
+
+        This will unlock a domain and send the authorization code to the domain’s registrant email.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 3 | Unable to perform this operation | Domain is suspended. Verify registrant email and try again.
+        400 | 3 | Unable to perform this operation | Domain locked by registrar.
+        400 | 3 | Unable to perform this operation | Domain locked by registry.
+        400 | 3 | Unable to perform this operation | Domain in 60 days transfer lock.
+        400 | 3 | Unable to perform this operation | Domain is expired and transfer lock.
+        400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      responses:
+        204:
+          description: Authorization code will be sent to the domain's registrant email.
+          schema:
+            $ref: "#/definitions/EmptyResponse"
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    delete:
+      operationId: cancelTransferOut
+      tags:
+        - Transfer Out
+      summary: Cancel transfer out.
+      description: |
+        Cancel transfer out process for domain.
+
+        Domain will be locked again.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 3 | Unable to perform this operation | Domain is suspended. Verify registrant email and try again.
+        400 | 3 | Unable to perform this operation | Domain locked by registrar.
+        400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      responses:
+        204:
+          description: Transfer out process was canceled.
+          schema:
+            $ref: "#/definitions/EmptyResponse"
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /transfers_in:
+    get:
+      operationId: getTransferList
+      tags:
+        - Transfer In
+      summary: Get active transfers in.
+      description: |
+        Get paged list of active transfers in.
+
+      parameters:
+        - $ref: '#/parameters/current_page'
+        - $ref: '#/parameters/per_page'
+        - name: domain_like
+          in: query
+          type: string
+        - $ref: '#/parameters/transfer_status'
+
+      responses:
+        200:
+          description: Returns paged list of active transfers in.
+          schema:
+            $ref: '#/definitions/TransfersInListResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    post:
+      operationId: initTransferIn
+      tags:
+        - Transfer In
+      summary: Init transfers in.
+      description: |
+        Initiate transfer in process for domain.
+
+        You should provide correct WHOIS information.
+
+        Also you can provide name servers and name server records.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        412 | 3 | Unable to perform this operation | Not enough balance. Please add funds on balance and try again.
+        400 | 3 | Unable to perform this operation | Domain in status Pending.
+        400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      parameters:
+        - name: data
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/TransferInRequest'
+
+      responses:
+        201:
+          description: Ownership email will be sent to the domain's registrant email.
+          schema:
+            $ref: '#/definitions/TransferInResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        412:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+    delete:
+      operationId: cancel
+      tags:
+        - Transfer In
+      summary: Cancel transfers in.
+      description: |
+        Cancel transfer in process for domain.
+
+        ### Errors
+        HTTP code | Error code | Message | Description
+        - | - | - | -
+        400 | 4 | Registry error | Some registry side error. See `description` field for details and contact with support.
+
+      parameters:
+        - name: domain
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/TransferInCancelRequest'
+
+      responses:
+        204:
+          description: Transfer was canceled.
+          schema:
+            $ref: "#/definitions/EmptyResponse"
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /tlds:
+    get:
+      operationId: getTlds
+      tags:
+        - Other
+      summary: Get full list of available TLDs.
+      description: |
+          Get full list of available TLDs with prices and other information.
+
+      responses:
+        200:
+          description: Returns full list of available TLDs with prices.
+          schema:
+            $ref: '#/definitions/TldsListResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /emails:
+    get:
+      operationId: getEmails
+      tags:
+        - Other
+      summary: Get account related emails.
+      description: |
+        Get paged list with account related emails.
+
+        ### Filters
+
+        Name | Description
+        - | -
+        `email_like` | Only include emails containing given string.
+        `status` | Only include domains with given status.
+        `email_status` | Only include emails with given email status.
+
+      parameters:
+        - $ref: '#/parameters/current_page'
+        - $ref: '#/parameters/per_page'
+        - name: email_like
+          description: Filter for email.
+          in: query
+          type: string
+        - $ref: '#/parameters/status'
+        - $ref: '#/parameters/email_status'
+
+      responses:
+        200:
+          description: Returns paged list with account related emails.
+          schema:
+            $ref: '#/definitions/EmailsListResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+  /account/balance:
+    get:
+      operationId: getBalance
+      tags:
+        - Account
+      summary: Get current balance.
+      description: |
+          Get current balance.
+
+      responses:
+        200:
+          description: Returns current balance.
+          schema:
+            $ref: '#/definitions/BalanceResponse'
+        400:
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+
+################################################################################
+#                                Definitions                                   #
+################################################################################
+definitions:
+
+  ErrorResponse:
+    type: object
+    required:
+    - errors
+    properties:
+      errors:
+        type: array
+        items:
+          $ref: '#/definitions/Error'
+
+  Error:
+    type: object
+    required:
+    - code
+    - message
+    properties:
+      code:
+        type: integer
+        format: int32
+        description: Unique error code
+        enum:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+      message:
+        type: string
+        description: Error message
+      description:
+        type: string
+        description: Error description
+
+  RegistrationData:
+    type: object
+    required:
+    - domain
+    - period
+    - whois_privacy
+    - registrant_contact
+    - admin_contact
+    - tech_contact
+    - billing_contact
+    properties:
+      domain:
+        type: string
+        x-validator: domain
+      period:
+        type: integer
+        description: Registration period in years.
+      whois_privacy:
+        type: boolean
+        description: If true WHOIS privacy protection will be enabled.
+      registrant_contact:
+        $ref: '#/definitions/Contact'
+      admin_contact:
+        $ref: '#/definitions/Contact'
+      tech_contact:
+        $ref: '#/definitions/Contact'
+      billing_contact:
+        $ref: '#/definitions/Contact'
+      premium_price:
+        type: number
+        format: float
+        description: Price to register premium domain. Required for premium domains.
+      claims_accepted:
+        type: boolean
+
+  NameServerRecordDeleteRequest:
+    type: object
+    required:
+      - id
+    properties:
+      id:
+        type: integer
+
+  WhoisInfoUpdateRequest:
+    type: object
+    required:
+    - registrant_contact
+    - admin_contact
+    - tech_contact
+    - billing_contact
+    properties:
+      registrant_contact:
+        $ref: '#/definitions/Contact'
+      admin_contact:
+        $ref: '#/definitions/Contact'
+      tech_contact:
+        $ref: '#/definitions/Contact'
+      billing_contact:
+        $ref: '#/definitions/Contact'
+
+  RenewRequest:
+    type: object
+    required:
+    - period
+    properties:
+      period:
+        type: integer
+        description: Registration period in years.
+      premium_price:
+        type: number
+        format: float
+        description: Price of renew operation. Required only for premium domains.
+
+  DomainRedirectUpdateRequest:
+    type: object
+    required:
+      - url
+    properties:
+      url:
+        type: string
+        x-validator: string
+      masking_enabled:
+        type: boolean
+        description: If true MASKING will be enabled
+      masking_title:
+        type: string
+        x-validator: string_optional
+      masking_desc:
+        type: string
+        x-validator: string_optional
+      masking_kwd:
+        type: string
+        x-validator: string_optional
+
+  NameServersUpdateRequest:
+    type: object
+    required:
+    - name_servers
+    properties:
+      name_servers:
+        type: array
+        minItems: 2
+        maxItems: 10
+        items:
+          type: string
+          x-validator: ns
+
+  ChildNameServerDeleteRequest:
+    type: object
+    required:
+      - hostname
+    properties:
+      hostname:
+        type: string
+        x-validator: hostname
+
+  TransferInCancelRequest:
+    type: object
+    required:
+    - domain
+    properties:
+      domain:
+        type: string
+        x-validator: domain
+
+  Prices:
+    type: object
+    description: Prices for operations with a domain.
+    required:
+      - currency
+      - register
+      - renew
+      - transfer
+      - redeem
+    properties:
+      currency:
+        type: string
+        default: usd
+        enum:
+          - usd
+          - eur
+      register:
+        type: number
+        format: float
+      renew:
+        type: number
+        format: float
+      transfer:
+        type: number
+        format: float
+      redeem:
+        type: number
+        format: float
+
+  Contact:
+    type: object
+    required:
+    - org
+    - name
+    - email
+    - address
+    - city
+    - state
+    - zip
+    - country
+    - phone
+    properties:
+      org:
+        type: string
+        description: Contact organization
+        x-validator: string_optional
+      name:
+        type: string
+        description: Contact name
+        x-validator: string
+      email:
+        type: string
+        description: Contact email
+        x-validator: email
+      address:
+        type: string
+        description: Contact address
+        x-validator: string
+      city:
+        type: string
+        description: Contact city
+        x-validator: string
+      state:
+        type: string
+        description: Contact state
+        x-validator: string
+      zip:
+        type: string
+        description: Contact zip
+        maxLength: 10
+        x-validator: string
+      country:
+        type: string
+        description: Contact country
+        x-validator: country
+      phone:
+        type: string
+        description: Contact phone
+        x-validator: phone
+
+  ChildNameServer:
+    type: object
+    required:
+      - hostname
+    properties:
+      hostname:
+        type: string
+        x-validator: hostname
+      ipv4:
+        type: string
+        x-validator: ip_optional
+      ipv6:
+        type: string
+        x-validator: ip_optional
+
+  TransferInRequest:
+    type: object
+    required:
+      - domain
+      - auth_code
+      - whois_privacy
+      - registrant_contact
+      - admin_contact
+      - tech_contact
+      - billing_contact
+    properties:
+      domain:
+        type: string
+        x-validator: domain
+      auth_code:
+        type: string
+        x-validator: empty
+      premium_price:
+        type: number
+        format: float
+        description: Price to transfer premium domain
+      whois_privacy:
+        type: boolean
+        description: If true WHOIS privacy protection will be enabled
+      registrant_contact:
+        $ref: '#/definitions/Contact'
+      admin_contact:
+        $ref: '#/definitions/Contact'
+      tech_contact:
+        $ref: '#/definitions/Contact'
+      billing_contact:
+        $ref: '#/definitions/Contact'
+      name_servers:
+        type: array
+        minItems: 2
+        maxItems: 10
+        items:
+          type: string
+          x-validator: ns
+      name_server_records:
+        type: array
+        items:
+          $ref: '#/definitions/NameServerRecord'
+
+  TransferInInfo:
+    type: object
+    required:
+      - domain
+      - transfer_status
+      - whois_privacy
+      - registrant_contact
+      - admin_contact
+      - tech_contact
+      - billing_contact
+    properties:
+      domain:
+        type: string
+        x-validator: domain
+      transfer_status:
+        type: string
+        enum:
+          - waiting registrant confirmation
+          - registrant rejected
+          - registrar rejected
+          - waiting transfer
+      premium_price:
+        type: number
+        format: float
+        description: Price to transfer premium domain
+      whois_privacy:
+        type: boolean
+        description: If true WHOIS privacy protection will be enabled
+      registrant_contact:
+        $ref: '#/definitions/Contact'
+      admin_contact:
+        $ref: '#/definitions/Contact'
+      tech_contact:
+        $ref: '#/definitions/Contact'
+      billing_contact:
+        $ref: '#/definitions/Contact'
+      name_servers:
+        type: array
+        minItems: 2
+        maxItems: 10
+        items:
+          type: string
+      name_server_records:
+        type: array
+        items:
+          $ref: '#/definitions/NameServerRecord'
+
+  TransfersInListResponse:
+    type: object
+    required:
+      - meta
+      - data
+    properties:
+      meta:
+        $ref: '#/definitions/PaginationMeta'
+      data:
+        type: array
+        items:
+          $ref: '#/definitions/TransferInInfo'
+
+  TransferInResponse:
+    type: object
+    required:
+      - data
+    properties:
+      data:
+        $ref: '#/definitions/TransferInInfo'
+
+  WhoisPrivacyResponse:
+    type: object
+    required:
+    - data
+    properties:
+      data:
+        type: object
+        required:
+          - domain
+          - enabled
+        properties:
+          domain:
+            type: string
+          enabled:
+            type: boolean
+
+  WhoisResponse:
+    type: object
+    required:
+    - data
+    properties:
+      data:
+        type: object
+        required:
+          - registrant_contact
+          - admin_contact
+          - tech_contact
+          - billing_contact
+        properties:
+          whois_privacy:
+            type: boolean
+          preview:
+            type: boolean
+          registrant_contact:
+            $ref: '#/definitions/Contact'
+          admin_contact:
+            $ref: '#/definitions/Contact'
+          tech_contact:
+            $ref: '#/definitions/Contact'
+          billing_contact:
+            $ref: '#/definitions/Contact'
+      meta:
+        type: object
+        properties:
+          notice:
+            type: string
+
+  AutoRenewResponse:
+    type: object
+    required:
+    - data
+    properties:
+      data:
+        type: object
+        required:
+          - domain
+          - auto_renew
+        properties:
+          domain:
+            type: string
+          auto_renew:
+            type: boolean
+
+  DomainRedirectResponse:
+    type: object
+    required:
+    - data
+    properties:
+      data:
+        type: object
+        properties:
+          url:
+            type: string
+          masking_enabled:
+            type: boolean
+          masking_title:
+            type: string
+          masking_desc:
+            type: string
+          masking_kwd:
+            type: string
+
+  NameServersResponse:
+    type: object
+    properties:
+      data:
+        type: array
+        items:
+          type: string
+
+  TldsListResponse:
+    type: object
+    required:
+    - data
+    properties:
+      data:
+        type: array
+        items:
+          type: object
+          required:
+            - tld
+            - prices
+          properties:
+            tld:
+              type: string
+              description: the registerable suffix. In most cases the suffix matches a TLD, but there are some cases where the suffix is a subzone of the TLD (e.g. co.uk).
+            prices:
+              $ref: '#/definitions/Prices'
+            promo_prices:
+              $ref: '#/definitions/Prices'
+            promo_untill:
+              type: string
+              format: date
+
+  PaginationMeta:
+    type: object
+    required:
+      - current_page
+      - per_page
+      - total_entries
+      - total_pages
+    properties:
+      current_page:
+        type: integer
+        description: The page currently returned.
+      per_page:
+        type: integer
+        description: The number of entries returned per page.
+      total_entries:
+        type: integer
+        description: The total number of entries available in the entire collection.
+      total_pages:
+        type: integer
+        description: The total number of pages available given the current per_page value.
+
+  DomainInfo:
+    type: object
+    required:
+      - domain
+      - premium
+      - auto_renew
+      - whois_privacy
+      - lock_status
+      - registration_date
+      - expiration_date
+      - name_servers
+      - status
+    properties:
+      domain:
+        type: string
+      premium:
+        type: boolean
+      auto_renew:
+        type: boolean
+      whois_privacy:
+        type: boolean
+      lock_status:
+        type: string
+        enum:
+          - unlocked
+          - client
+          - registrar
+          - registry
+      registration_date:
+        type: string
+        format: dateTime
+      expiration_date:
+        type: string
+        format: dateTime
+      deletion_date:
+        type: string
+        format: dateTime
+      status:
+        type: string
+        enum:
+          - ok
+          - transfer out ready
+          - transferring out
+          - expired
+          - redemption
+          - suspended
+      name_servers:
+        type: array
+        minItems: 2
+        maxItems: 10
+        items:
+          type: string
+        description: The list of name servers for the domain.
+
+  DomainsListResponse:
+    type: object
+    required:
+    - data
+    - meta
+    properties:
+      meta:
+        $ref: '#/definitions/PaginationMeta'
+      data:
+        type: array
+        items:
+          $ref: '#/definitions/DomainInfo'
+
+  DomainInfoResponse:
+    type: object
+    required:
+      - data
+    properties:
+      data:
+        $ref: '#/definitions/DomainInfo'
+
+  RenewResponse:
+    type: object
+    required:
+      - data
+    properties:
+      data:
+        type: object
+        required:
+          - domain
+          - new_expiration_date
+        properties:
+          domain:
+            type: string
+          new_expiration_date:
+            type: string
+            format: dateTime
+
+  ChildNameServersListResponse:
+    type: object
+    required:
+    - data
+    properties:
+      data:
+        type: array
+        items:
+          $ref: '#/definitions/ChildNameServer'
+
+  ChildNameServerResponse:
+    type: object
+    required:
+    - data
+    properties:
+      data:
+        $ref: '#/definitions/ChildNameServer'
+
+  NameServerRecord:
+    type: object
+    required:
+      - name
+      - type
+      - value
+      - priority
+    properties:
+      id:
+        type: integer
+        description: The unique identificator of ns record.
+      name:
+        type: string
+        description: Name of the host record
+        x-validator: hostname
+      type:
+        type: string
+        enum:
+          - A
+          - AAAA
+          - CNAME
+          - NS
+          - MX
+          - SRV
+          - TXT
+      value:
+        type: string
+        description: Data of the host record
+        x-validator: string
+      priority:
+        type: integer
+        description: Priority of the host record
+      ttl:
+        type: integer
+        description: TTL of the host record
+
+  NameServerRecordsListResponse:
+    type: object
+    required:
+    - data
+    properties:
+      data:
+        type: array
+        items:
+          $ref: '#/definitions/NameServerRecord'
+
+  NameServerRecordResponse:
+    type: object
+    required:
+    - data
+    properties:
+      data:
+        $ref: '#/definitions/NameServerRecord'
+
+  CheckInfo:
+    type: object
+    required:
+    - domain
+    - available
+    - premium
+    - prices
+    - claim
+    properties:
+      domain:
+        type: string
+      available:
+        type: boolean
+      premium:
+        type: boolean
+      prices:
+        $ref: '#/definitions/Prices'
+      promo_prices:
+        $ref: '#/definitions/Prices'
+      claim:
+        type: boolean
+
+  CheckResponse:
+    type: object
+    required:
+      - data
+    properties:
+      data:
+        $ref: '#/definitions/CheckInfo'
+
+  StatusCodesListResponse:
+    type: object
+    required:
+      - data
+    properties:
+      data:
+        type: array
+        items:
+            type: string
+            enum:
+            - addPeriod
+            - autoRenewPeriod
+            - inactive
+            - ok
+            - pendingCreate
+            - pendingDelete
+            - pendingRenew
+            - pendingRestore
+            - pendingTransfer
+            - pendingUpdate
+            - redemptionPeriod
+            - renewPeriod
+            - serverDeleteProhibited
+            - serverHold
+            - serverRenewProhibited
+            - serverTransferProhibited
+            - serverUpdateProhibited
+            - transferPeriod
+            - clientDeleteProhibited
+            - clientHold
+            - clientRenewProhibited
+            - clientTransferProhibited
+            - clientUpdateProhibited
+
+  ClaimContact:
+    type: object
+    required:
+      - organization
+    properties:
+      organization:
+        type: string
+      name:
+        type: string
+      street:
+        type: string
+      state:
+        type: string
+      city:
+        type: string
+      zip:
+        type: string
+      country_code:
+        type: string
+      phone:
+        type: string
+      email:
+        type: string
+
+  Claim:
+    type: object
+    required:
+      - trade_mark
+      - jurisdiction
+      - jurisdiction_country_code
+      - goods
+      - registrant_contact
+      - agent_contact
+      - description
+    properties:
+      trade_mark:
+        type: string
+      jurisdiction:
+        type: string
+      jurisdiction_country_code:
+        type: string
+      goods:
+        type: string
+      registrant_contact:
+        $ref: '#/definitions/ClaimContact'
+      agent_contact:
+        $ref: '#/definitions/ClaimContact'
+      description:
+        type: array
+        items:
+          type: string
+
+  ClaimResponse:
+    type: object
+    required:
+      - data
+    properties:
+      data:
+        type: array
+        items:
+          $ref: '#/definitions/Claim'
+
+  EmailInfo:
+    type: object
+    required:
+      - email
+      - first_email_date
+      - suspend_date
+      - status
+      - domains
+    properties:
+      email:
+        type: string
+        description: The email.
+      first_email_date:
+        type: string
+        format: dateTime
+        description: The date and time when verification email was sent first time.
+      verify_date:
+        type: string
+        format: dateTime
+        description: The date and time when email was verified.
+      suspend_date:
+        type: string
+        format: dateTime
+        description: The date and time when email will be blocked.
+      status:
+        type: string
+        enum:
+          - unverified
+          - verified
+          - suspended
+      domains:
+        type: array
+        items:
+          type: object
+          required:
+            - domain
+            - status
+          properties:
+            domain:
+              type: string
+            status:
+              type: string
+              enum:
+                - ok
+                - transfer out ready
+                - transferring out
+                - expired
+                - redemption
+                - suspended
+
+  EmailsListResponse:
+    type: object
+    required:
+      - data
+      - meta
+    properties:
+      meta:
+        $ref: '#/definitions/PaginationMeta'
+      data:
+        type: array
+        items:
+          $ref: '#/definitions/EmailInfo'
+
+  BalanceResponse:
+    type: object
+    required:
+      - data
+    properties:
+      data:
+        $ref: '#/definitions/Balance'
+
+  Balance:
+    type: object
+    required:
+    - balance
+    properties:
+      balance:
+        type: number
+        format: float
+
+  EmptyResponse:
+    type: object
+    properties:
+      data:
+        type: array
+        items:
+          type: string
