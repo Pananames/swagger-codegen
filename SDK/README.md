@@ -1,3 +1,10 @@
+Generate library:
+-----------------------------------
+
+```
+sudo ./run-in-docker.sh generate -i SDK/config.yaml -l php -o SDK/lib/Pananames -t SDK/template/ --invoker-package 'Pananames' --git-user-id 'pananames' --git-repo-id 'php-api' --artifact-version '2.0.0'
+```
+
 -----------------------
 Development in Docker
 -----------------------

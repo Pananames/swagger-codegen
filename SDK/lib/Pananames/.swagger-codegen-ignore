@@ -1,0 +1,5 @@
+lib/ApiException.*
+lib/Configuration.*
+lib/HeaderSelector.*
+test/
+git_push.sh
